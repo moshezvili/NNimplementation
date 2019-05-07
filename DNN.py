@@ -1,12 +1,35 @@
 import numpy as np
 from loadDataSet import load_datad_set_from_folder
 import time
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
+class DrawRealTime:
+	def __init__(self, epochs):
+		plt.ion()
+		self.fig, self.ax = plt.subplots()
+		self.x, self.y, self.z = [], [], []
+		plt.xlim(0, epochs)
+		plt.ylim(0, 1)
+		plt.draw()
+
+	def updatePlot(self, epoch, acc_train, acc_val):
+		self.x.append(epoch)
+		self.y.append(acc_train)
+		self.z.append(acc_val)
+		self.ax.plot(self.x, self.y,color='blue')
+		self.ax.plot(self.x, self.z,color='green')
+		plt.legend(["train","validation"])
+		self.fig.canvas.draw_idle()
+		plt.pause(0.1)
 
 
 class DNN:
 	LEARNING_RATE = 0.01
 	input_dim = 1024
 	output_dim = 1
+	BATCH_SIZE = 64
 	np.random.seed(0)
 	df_val = load_datad_set_from_folder(r"C:\Users\Yotam\Desktop\MS_Dataset_2019\validation\\")
 
@@ -17,22 +40,31 @@ class DNN:
 		self.output_layer = None
 
 	def train(self, folder: str, epochs: int = None):
+		accPlot = DrawRealTime(epochs)
 		df = load_datad_set_from_folder(folder)
 		if epochs is not None:
 			for i in range(epochs):
+				acc, loss = 0, 1
 				tic = time.time()
-				loss, acc = self.update_weight_bias(df, self.LEARNING_RATE, len(df))
+				batches_list = self.divide_data_set_to_batches(df, self.BATCH_SIZE)
+				for batch in batches_list:
+					loss, acc = self.update_weight_bias(batch, self.LEARNING_RATE, self.BATCH_SIZE)
 				toc = time.time()
-				print(f'Epoch {i}/{epochs}')
+				acc_val = self.run_test()
+				accPlot.updatePlot(i, acc, acc_val)
+				print(f'Epoch {i + 1}/{epochs}')
 				print(f"{toc - tic}s - loss: {loss} - acc: {acc}")
-				print('Validation:` ', self.run_test())
+				print('Validation:', acc_val)
 		else:
 			acc = 0.5
 			while acc < 0.95:
-				loss, acc = self.update_weight_bias(df, self.LEARNING_RATE, len(df))
+				tic = time.time()
+				batches_list = self.divide_data_set_to_batches(df, self.BATCH_SIZE)
+				for batch in batches_list:
+					loss, acc = self.update_weight_bias(batch, self.LEARNING_RATE, self.BATCH_SIZE)
+				toc = time.time()
+				print(f"{toc - tic}s - loss: {loss} - acc: {acc}")
 				print('Validation:` ', self.run_test())
-				print(acc)
-			STOP = True
 
 	def run_test(self):
 		df = self.df_val
@@ -65,6 +97,15 @@ class DNN:
 
 		return d_nabla_b, d_nabla_w, res_bp
 
+	def divide_data_set_to_batches(self, data_set, batch_size):
+		bathcList = []
+		data_set = data_set.reset_index().drop(columns=['index'])
+		while len(data_set) > 0:
+			batch = data_set.sample(batch_size, random_state=1)
+			data_set = data_set.drop(batch.index)
+			bathcList.append(batch)
+		return bathcList
+
 	def update_weight_bias(self, data_set, lr, batch_size):
 		nabla_w = [np.zeros(w.shape) for w in [self.input_layer.weights, self.hidden_layer.weights]]
 		nabla_b = [np.zeros(b.shape) for b in [self.input_layer.biases, self.hidden_layer.biases]]
@@ -80,9 +121,8 @@ class DNN:
 		self.input_layer.weights, self.hidden_layer.weights = [w - (lr / batch_size) * dw for w, dw in zip(
 			[self.input_layer.weights, self.hidden_layer.weights], nabla_w)]
 		self.input_layer.biases, self.hidden_layer.biases = [b - (lr / batch_size) * db for b, db in
-															 zip([self.input_layer.biases, self.hidden_layer.biases],
-																 nabla_b)]
-
+		                                                     zip([self.input_layer.biases, self.hidden_layer.biases],
+		                                                         nabla_b)]
 		mean_loss = np.mean(loss)
 		mean_accuracy = np.mean(accuracy)
 		return mean_loss, mean_accuracy
