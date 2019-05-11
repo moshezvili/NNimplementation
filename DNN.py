@@ -1,8 +1,25 @@
 import numpy as np
-from loadDataSet import load_datad_set_from_folder
 import time
 import pandas as pd
 import matplotlib.pyplot as plt
+from concurrent.futures import ProcessPoolExecutor
+import os
+import matplotlib.image as mpimg
+
+def load_data_set_from_folder(folder):
+	filesList = os.listdir(folder)
+	df = pd.DataFrame()
+	for file in filesList:
+		im = mpimg.imread(folder+ file)
+		im2 = np.ravel(im).reshape((1,1024))
+		word_lable = file.split("_")[0]
+		if word_lable == 'neg':
+			lable = 0
+		else:
+			lable = 1
+		dfRow  = pd.DataFrame({'data': [im2] , 'lable' : [lable]})
+		df  = df.append(dfRow)
+	return df
 
 
 class DrawRealTime:
@@ -31,7 +48,7 @@ class DNN:
 	output_dim = 1
 	BATCH_SIZE = 64
 	np.random.seed(0)
-	df_val = load_datad_set_from_folder(r"C:\Users\Yotam\Desktop\MS_Dataset_2019\validation\\")
+	df_val = load_data_set_from_folder(r"C:\Users\Yotam\Desktop\MS_Dataset_2019\validation\\")
 
 	def __init__(self, num_of_hidden):
 		self.num_of_hidden = num_of_hidden
@@ -39,22 +56,28 @@ class DNN:
 		self.hidden_layer = NeuronLayer(num_of_hidden, self.output_dim)
 		self.output_layer = None
 
-	def train(self, folder: str, epochs: int = None):
-		accPlot = DrawRealTime(epochs)
-		df = load_datad_set_from_folder(folder)
+	def train(self, folder: str, learning_rate : float =0.01 ,batch_size : int = 64, epochs: int = 250, is_plot : bool = False):
+		trainDf = pd.DataFrame(columns=['epoch','train_acc','val_acc'])
+		if is_plot:
+			accPlot = DrawRealTime(epochs)
+		df = load_data_set_from_folder(folder)
 		if epochs is not None:
 			for i in range(epochs):
 				acc, loss = 0, 1
 				tic = time.time()
-				batches_list = self.divide_data_set_to_batches(df, self.BATCH_SIZE)
+				batches_list = self.divide_data_set_to_batches(df, batch_size)
 				for batch in batches_list:
-					loss, acc = self.update_weight_bias(batch, self.LEARNING_RATE, self.BATCH_SIZE)
+					loss, acc = self.update_weight_bias(batch,learning_rate, batch_size)
 				toc = time.time()
 				acc_val = self.run_test()
-				accPlot.updatePlot(i, acc, acc_val)
+				if is_plot:
+					accPlot.updatePlot(i, acc, acc_val)
 				print(f'Epoch {i + 1}/{epochs}')
 				print(f"{toc - tic}s - loss: {loss} - acc: {acc}")
 				print('Validation:', acc_val)
+				dfRow = pd.DataFrame({'epoch' : [i], 'train_acc' : [acc], 'val_acc' : [acc_val]})
+				trainDf = trainDf.append(dfRow)
+			trainDf.to_csv("C:\\Users\\Yotam\\Desktop\\gridsearch\\" + str(self.num_of_hidden)+'_'+str(batch_size)+'_'+str(learning_rate)+'.csv',index=False)
 		else:
 			acc = 0.5
 			while acc < 0.95:
@@ -158,3 +181,21 @@ def relu_derivative(x) -> np.ndarray:
 	x[x <= 0] = 0
 	x[x > 0] = 1
 	return x
+
+
+def create_model_and_train(num_hiddens : int =  512, learning_rate : float =0.01 ,batch_size : int = 64, epochs: int = 250):
+	dnn = DNN(num_hiddens)
+	dnn.train('C:\\Users\\Yotam\\Desktop\\MS_Dataset_2019\\training\\', learning_rate=learning_rate,batch_size=batch_size,epochs=epochs)
+
+def grid_search(num_hidden_list , batch_size_list ,learning_list):
+	nOfProcessors=4
+	with ProcessPoolExecutor(max_workers=nOfProcessors) as executor:
+		for num_hidden in num_hidden_list:
+			for lr in learning_list:
+				for batch_size in batch_size_list:
+					executor.submit(create_model_and_train,num_hidden,lr,batch_size,150)
+if __name__ == '__main__':
+	num_hidden_list = [1000]
+	batch_size_list = [16,32]
+	learning_list = [0.01,0.02]
+	grid_search(num_hidden_list , batch_size_list ,learning_list)

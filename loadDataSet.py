@@ -21,8 +21,8 @@ def load_datad_set_from_folder(folder):
         dfRow  = pd.DataFrame({'data': [im2] , 'lable' : [lable]})
         df  = df.append(dfRow)
     return df
-
-if __name__ == '__main__':
-    # load_datad_set_from_folder("C:\\Users\\Yotam\\Desktop\\MS_Dataset_2019\\training\\")
-    dnn = DNN(512)
-    dnn.train('C:\\Users\\Yotam\\Desktop\\MS_Dataset_2019\\training\\')
+#
+# if __name__ == '__main__':
+#     # load_datad_set_from_folder("C:\\Users\\Yotam\\Desktop\\MS_Dataset_2019\\training\\")
+#     dnn = DNN(512)
+#     dnn.train('C:\\Users\\Yotam\\Desktop\\MS_Dataset_2019\\training\\',300)
